@@ -36,13 +36,22 @@ def main():
     clear_contents(out_dir)
     entry_path = os.path.join(out_dir, "entry.txt")
     data = LINE.encode("utf-8")
-    with open(entry_path, "wb") as f:
+    # Write atomically: a crash mid-write can never leave a partial file.
+    tmp_path = entry_path + ".tmp"
+    with open(tmp_path, "wb") as f:
         f.write(data)
-    # Read back and verify byte for byte.
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, entry_path)
+    # Read back and verify byte for byte, and as valid UTF-8 text.
     with open(entry_path, "rb") as f:
         back = f.read()
     if back != data:
         print("verification failed: entry.txt differs from intended bytes",
+              file=sys.stderr)
+        return 1
+    if back.decode("utf-8") != LINE:
+        print("verification failed: entry.txt is not the intended UTF-8 text",
               file=sys.stderr)
         return 1
     if not (1 <= len(LINE) <= 200):
